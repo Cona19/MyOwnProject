@@ -27,7 +27,7 @@ public:
     }
     int useCPU(int curTime){
 		if (burstTime == 0) return NOTEXIST;
-        printf(" %d", id);
+        printf("%2d ", id);
         burstTime--;
 		tq--;
 		waitingTime += curTime - lastExecutedTime - 1;
@@ -68,6 +68,15 @@ void printUsage(){
     printf("-r <number>  Round-Robin Scheduling\n");
     exit(-1);
 }
+void printGantt(int i){
+	int max = MAX_WIDTH + i;
+	printf("%2d ", ++i);
+	for (; i < max; i++){
+		if (i % 5 == 0) printf("%2d",i);
+		else printf("  ");
+	}
+	printf("\n");
+}
 
 void runScheduler(int cntProc,int tq,vector<Process>* scheduler){
 	int ret;
@@ -75,8 +84,15 @@ void runScheduler(int cntProc,int tq,vector<Process>* scheduler){
 	int finishCnt = 0;
 	int curTime = 0;
 
+	printf("Gantt Chart");
+	printGantt(curTime);
+
 	while(finishCnt == cntProc){
 		curTime++;
+		if (curTime % MAX_WIDTH == 0){
+			printf("\n");
+			printGantt(curTime-1);
+		}
 		ret = (*scheduler)[i].useCPU(curTime);
 		if (ret != CONTINUE){
 			if (ret == FINISH)
