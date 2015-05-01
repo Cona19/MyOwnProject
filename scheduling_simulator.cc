@@ -4,7 +4,10 @@
 
 #define MAX_TQ 2147483647
 #define MAX_WIDTH 70
-#define FINISH -1
+#define FINISH 0
+#define NOTEXIST 1
+#define SWITCH 2
+#define CONTINUE 3
 using namespace std;
 
 class Process{
@@ -13,20 +16,30 @@ private:
     int burstTime;
     int priority;
     int lastExecutedTime;
+	int waitingTime;
 	int tq;
 public:
     void load(FILE *in, int t){
         fscanf(in, "%d %d %d\n", &id, &burstTime, &priority);
         lastExecutedTime = 0;
 		tq = t;
+		waitingTime = 0;
     }
-    int getCPU(){
+    int useCPU(int curTime){
+		if (burstTime == 0) return NOTEXIST;
         printf(" %d", id);
         burstTime--;
 		tq--;
+		waitingTime += curTime - lastExecutedTime - 1;
+		lastExecutedTime = curTime;
 
         if (burstTime == 0) return FINISH;
+		if (tq == 0) return SWITCH;
+		return CONTINUE;
     }
+	void setTQ(int t){
+		tq = t;
+	}
     int getBurstTime(){
         return burstTime;
     }
@@ -56,8 +69,24 @@ void printUsage(){
     exit(-1);
 }
 
-void runScheduler(int cntProc,vector<Process>* scheduler){
-    int i;
+void runScheduler(int cntProc,int tq,vector<Process>* scheduler){
+	int ret;
+    int i = 0;
+	int finishCnt = 0;
+	int curTime = 0;
+
+	while(finishCnt == cntProc){
+		curTime++;
+		ret = (*scheduler)[i].useCPU(curTime);
+		if (ret != CONTINUE){
+			if (ret == FINISH)
+				finishCnt++;
+			else if(ret == SWITCH)
+				(*scheduler)[i].setTQ(tq);
+
+			i = (i + 1)%cntProc;
+		}
+	}
 }
 
 int main(int argc, char* argv[]){
@@ -99,7 +128,7 @@ int main(int argc, char* argv[]){
        scheduler[i].load(in, tq);
     fclose(in);
 
-    runScheduler(cntProc, &scheduler);
+    runScheduler(cntProc, tq, &scheduler);
 
     return 0;
 }
