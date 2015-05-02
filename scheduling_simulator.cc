@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #define MAX_TQ 2147483647
-#define MAX_WIDTH 70
+#define MAX_WIDTH 30
 #define FINISH 0
 #define NOTEXIST 1
 #define SWITCH 2
@@ -17,47 +17,130 @@ private:
     int priority;
     int lastExecutedTime;
 	int waitingTime;
-	int tq;
 public:
-    void load(FILE *in, int t){
+    void load(FILE *in){
         fscanf(in, "%d %d %d\n", &id, &burstTime, &priority);
-        lastExecutedTime = 0;
-		tq = t;
+        lastExecutedTime = 1;
 		waitingTime = 0;
     }
     int useCPU(int curTime){
 		if (burstTime == 0) return NOTEXIST;
-        printf("%2d ", id);
+        printf("%2d", id);
         burstTime--;
-		tq--;
 		waitingTime += curTime - lastExecutedTime - 1;
 		lastExecutedTime = curTime;
 
         if (burstTime == 0) return FINISH;
-		if (tq == 0) return SWITCH;
 		return CONTINUE;
     }
-	void setTQ(int t){
-		tq = t;
-	}
     int getBurstTime(){
         return burstTime;
     }
     int getPriority(){
         return priority;
     }
+    void printID(){
+    	printf("%d\n", id);
+	}
 };
 
-int sjfComparer(const void *x, const void *y){
-    if (((Process*)x)->getBurstTime() > ((Process*)y)->getBurstTime()) return 1;
-    else if (((Process*)x)->getBurstTime() < ((Process*)y)->getBurstTime()) return -1;
-    else return 0;
-}
-int priorityComparer(const void *x, const void *y){
-    if (((Process*)x)->getPriority() > ((Process*)y)->getPriority()) return 1;
-    else if (((Process*)x)->getPriority() < ((Process*)y)->getPriority()) return -1;
-    else return 0;
-}
+class Scheduler{
+private:
+	int cntProc;
+	vector<Process> readyQueue;
+	vector<Process> endQueue;
+	int tq;
+	
+	void printGantt(int i){
+		int max = MAX_WIDTH + i;
+		i++;
+		printf("%2d", i++);
+		
+		for (; i <= max; i++){
+			if (i % 5 == 0) printf("%2d",i);
+			else printf("  ");
+		}
+		printf("\n");
+	}
+public:
+	Scheduler(){
+		readyQueue.clear();
+		endQueue.clear();
+		tq = 0;
+		cntProc = 0;
+	}
+	static int sjfComparer(const void *x, const void *y){
+	    if (((Process*)x)->getBurstTime() > ((Process*)y)->getBurstTime()) return 1;
+	    else if (((Process*)x)->getBurstTime() < ((Process*)y)->getBurstTime()) return -1;
+	    else return 0;
+	}
+	static int priorityComparer(const void *x, const void *y){
+	    if (((Process*)x)->getPriority() > ((Process*)y)->getPriority()) return 1;
+	    else if (((Process*)x)->getPriority() < ((Process*)y)->getPriority()) return -1;
+	    else return 0;
+	}
+	void setCntProc(int cntProc){
+		this->cntProc = cntProc;
+	}
+	void addProc(Process element){
+		readyQueue.push_back(element);
+	}
+	void setTQ(int tq){
+		this->tq = tq;
+	}
+	int sort(char ch){
+		int (*comparer)(const void*, const void*) = NULL;
+		if (ch != 'f' && ch != 's' && ch != 'p' && ch != 'r')
+			return 1;
+		if (ch =='s')
+			comparer = sjfComparer;
+		if (ch == 'p')
+			comparer = priorityComparer;
+		if (comparer)
+			qsort(&readyQueue, cntProc, sizeof(Process), comparer);
+		
+		for (int i = 0; i < cntProc; i++)
+			readyQueue[i].printID();
+			
+		return 0;
+	}
+	void run(){
+		int ret;
+	    int i = 0;
+		int curTime = 0;
+		int curTQ = tq;
+	
+		printf("Gantt Chart\n");
+		printGantt(curTime);
+	
+		while(cntProc){
+			curTime++;
+			curTQ--;
+			ret = readyQueue[i].useCPU(curTime);
+			switch(ret){
+			case FINISH:
+				cntProc--;
+				curTQ = tq;
+				endQueue.push_back(readyQueue[i]);
+				readyQueue.erase(readyQueue.begin() + i);
+				if (!cntProc)
+					return;
+				i = i % cntProc;
+				break;
+			case CONTINUE:
+				if (!curTQ){
+					curTQ = tq;
+					i = (i + 1)%cntProc;
+				}
+				break;
+			}
+			if (curTime % MAX_WIDTH == 0){
+				printf("\n");
+				printGantt(curTime);
+			}
+		}
+	}
+};
 
 void printUsage(){
     printf("Usage : ./filename <data filename> <scheduling policy>\n");
@@ -68,69 +151,18 @@ void printUsage(){
     printf("-r <number>  Round-Robin Scheduling\n");
     exit(-1);
 }
-void printGantt(int i){
-	int max = MAX_WIDTH + i;
-	printf("%2d ", ++i);
-	for (; i < max; i++){
-		if (i % 5 == 0) printf("%2d",i);
-		else printf("  ");
-	}
-	printf("\n");
-}
-
-void runScheduler(int cntProc,int tq,vector<Process>* scheduler){
-	int ret;
-    int i = 0;
-	int finishCnt = 0;
-	int curTime = 0;
-
-	printf("Gantt Chart");
-	printGantt(curTime);
-
-	while(finishCnt == cntProc){
-		curTime++;
-		if (curTime % MAX_WIDTH == 0){
-			printf("\n");
-			printGantt(curTime-1);
-		}
-		ret = (*scheduler)[i].useCPU(curTime);
-		if (ret != CONTINUE){
-			if (ret == FINISH)
-				finishCnt++;
-			else if(ret == SWITCH)
-				(*scheduler)[i].setTQ(tq);
-
-			i = (i + 1)%cntProc;
-		}
-	}
-}
 
 int main(int argc, char* argv[]){
-    vector<Process> scheduler;
+	Scheduler scheduler;
     int cntProc;
     int tq;
     FILE *in;
     int i;
-    if (argc != 3)
+ 
+    if (argc != 3 && argc != 4)
         printUsage();
 
-	tq = MAX_TQ;
-    switch(argv[2][1]){
-    case 'r':
-        tq = atoi(argv[3]);
-    case 'f':
-        break;
-    case 's':
-        qsort(&scheduler, cntProc, sizeof(Process), sjfComparer);
-        break;
-    case 'p':
-        qsort(&scheduler, cntProc, sizeof(Process), priorityComparer);
-        break;
-    default:
-        printUsage();
-    }
-
-
+	scheduler.setTQ(MAX_TQ);
     in = fopen(argv[1], "r");
     if (in == NULL){
         printf("unable to Load File %s\n", argv[1]);
@@ -138,13 +170,21 @@ int main(int argc, char* argv[]){
     }
 
     fscanf(in, "%d", &cntProc);
-    scheduler.clear();
-    
-    for (i = 0; i < cntProc; i++)
-       scheduler[i].load(in, tq);
+    scheduler.setCntProc(cntProc);
+    Process tmp;
+    for (i = 0; i < cntProc; i++){
+    	tmp.load(in);
+    	scheduler.addProc(tmp);
+	}
     fclose(in);
-
-    runScheduler(cntProc, tq, &scheduler);
+    
+    if (argv[2][1] == 'r')
+    	scheduler.setTQ(atoi(argv[3]));
+    else
+    	scheduler.sort(argv[2][1]);
+    
+    scheduler.run();
+    printf("\n");
 
     return 0;
 }
